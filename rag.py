@@ -16,7 +16,7 @@ GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
 # Constants
 CHUNK_SIZE = 1000
-EMBEDDING_MODEL = "BAAI/bge-large-en-v1.5"
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 VECTORSTORE_DIR = Path(__file__).parent / "resources/vectorstore"
 COLLECTION_NAME = "real_estate"
 
@@ -48,7 +48,7 @@ def initialize_components():
         vector_store = Chroma(
             collection_name=COLLECTION_NAME,
             embedding_function=embeddings,
-            persist_directory=str(VECTORSTORE_DIR)
+            #persist_directory=str(VECTORSTORE_DIR)
         )
 
 
