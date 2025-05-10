@@ -23,13 +23,14 @@ COLLECTION_NAME = "real_estate"
 # Global Components
 llm = None
 vector_store = None
+embeddings = None
 
 
 def initialize_components():
     """
-    Initializes LLM and vector store, loading FAISS from disk if available
+    Initializes LLM and loads existing FAISS vector store if available.
     """
-    global llm, vector_store
+    global llm, vector_store, embeddings
 
     if llm is None:
         llm = ChatGroq(
@@ -39,18 +40,14 @@ def initialize_components():
             max_tokens=500
         )
 
-    if vector_store is None:
+    if embeddings is None:
         embeddings = HuggingFaceEmbeddings(
             model_name=EMBEDDING_MODEL,
             model_kwargs={"trust_remote_code": True}
         )
 
-        if VECTORSTORE_DIR.exists() and any(VECTORSTORE_DIR.iterdir()):
-            # Load existing index
-            vector_store = FAISS.load_local(str(VECTORSTORE_DIR), embeddings)
-        else:
-            # Create empty vector store
-            vector_store = FAISS.from_documents([], embedding=embeddings)
+    if vector_store is None and VECTORSTORE_DIR.exists() and any(VECTORSTORE_DIR.iterdir()):
+        vector_store = FAISS.load_local(str(VECTORSTORE_DIR), embeddings)
 
 
 def reset_vector_store():
@@ -73,6 +70,8 @@ def process_urls(urls):
     """
     Scrapes data from URLs and stores processed documents into FAISS.
     """
+    global vector_store, embeddings
+
     yield "🧹 Resetting vector store..."
     reset_vector_store()
 
@@ -92,7 +91,7 @@ def process_urls(urls):
     docs = text_splitter.split_documents(data)
 
     yield f"💾 Adding {len(docs)} documents to FAISS database..."
-    vector_store.add_documents(docs)
+    vector_store = FAISS.from_documents(docs, embedding=embeddings)
 
     # Save the FAISS index to disk
     vector_store.save_local(str(VECTORSTORE_DIR))
