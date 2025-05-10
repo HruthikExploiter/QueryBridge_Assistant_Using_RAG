@@ -11,3 +11,4 @@ html5lib
 lxml
 protobuf==3.20.3
 opentelemetry-exporter-otlp-proto-grpc==1.22.0
+sentence-transformers
