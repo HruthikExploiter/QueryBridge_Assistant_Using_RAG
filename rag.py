@@ -1,8 +1,9 @@
 # importing the relevant libraries
 from uuid import uuid4
-from dotenv import load_dotenv
+import streamlit as st
 from pathlib import Path
 import shutil
+import os
 
 from langchain.chains import RetrievalQAWithSourcesChain
 from langchain_community.document_loaders import UnstructuredURLLoader
@@ -11,7 +12,7 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 
-load_dotenv()
+GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
 # Constants
 CHUNK_SIZE = 1000
@@ -31,7 +32,12 @@ def initialize_components():
     global llm, vector_store
 
     if llm is None:
-        llm = ChatGroq(model="llama3-70b-8192", temperature=0.9, max_tokens=500)
+        llm = ChatGroq(
+            api_key = GROQ_API_KEY,
+            model="llama3-70b-8192",
+            temperature=0.9,
+            max_tokens=500
+        )
 
     if vector_store is None:
         embeddings = HuggingFaceEmbeddings(
