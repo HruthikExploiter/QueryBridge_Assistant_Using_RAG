@@ -3,15 +3,15 @@ from uuid import uuid4
 import streamlit as st
 from pathlib import Path
 import shutil
-import os
 
 from langchain.chains import RetrievalQAWithSourcesChain
 from langchain_community.document_loaders import UnstructuredURLLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
+from langchain_community.vectorstores import FAISS
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_groq import ChatGroq
 
+# Get API key from Streamlit secrets
 GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
 
 # Constants
@@ -27,13 +27,13 @@ vector_store = None
 
 def initialize_components():
     """
-    Initializes LLM and vector store if not already initialized
+    Initializes LLM and vector store, loading FAISS from disk if available
     """
     global llm, vector_store
 
     if llm is None:
         llm = ChatGroq(
-            api_key = GROQ_API_KEY,
+            api_key=GROQ_API_KEY,
             model="llama3-70b-8192",
             temperature=0.9,
             max_tokens=500
@@ -45,48 +45,39 @@ def initialize_components():
             model_kwargs={"trust_remote_code": True}
         )
 
-        vector_store = Chroma(
-            collection_name=COLLECTION_NAME,
-            embedding_function=embeddings,
-            #persist_directory=str(VECTORSTORE_DIR)
-        )
+        if VECTORSTORE_DIR.exists() and any(VECTORSTORE_DIR.iterdir()):
+            # Load existing index
+            vector_store = FAISS.load_local(str(VECTORSTORE_DIR), embeddings)
+        else:
+            # Create empty vector store
+            vector_store = FAISS.from_documents([], embedding=embeddings)
 
-
-import shutil
 
 def reset_vector_store():
     """
-    Resets the vector store by clearing in-memory data and deleting persistent files.
+    Resets the FAISS vector store by deleting persistent index files.
     """
     global vector_store
+    vector_store = None  # Clear in-memory reference
 
-    # Step 1: Delete all documents from current collection
-    if vector_store is not None:
-        try:
-            vector_store._collection.delete(where={})  # Deletes all documents
-        except Exception as e:
-            print("Warning: Failed to delete from vector store:", e)
-
-    # Step 2: Remove Chroma persistent files (safe on Windows)
+    # Remove FAISS persistent files
     if VECTORSTORE_DIR.exists():
         try:
             shutil.rmtree(VECTORSTORE_DIR, ignore_errors=True)
             VECTORSTORE_DIR.mkdir(parents=True, exist_ok=True)
         except Exception as e:
-            print("Warning: Failed to clear vectorstore directory:", e)
-
-
+            print("Warning: Failed to reset vectorstore directory:", e)
 
 
 def process_urls(urls):
     """
-    Scrapes data from URLs and stores processed documents into Chroma DB.
+    Scrapes data from URLs and stores processed documents into FAISS.
     """
     yield "🧹 Resetting vector store..."
-    reset_vector_store() # Clean slate
+    reset_vector_store()
 
     yield "🔧 Initializing components..."
-    initialize_components() # Reinitialize components (vector_store & llm)
+    initialize_components()
 
     yield "📥 Loading data from URLs..."
     loader = UnstructuredURLLoader(urls=urls)
@@ -100,9 +91,11 @@ def process_urls(urls):
     )
     docs = text_splitter.split_documents(data)
 
-    yield f"💾 Adding {len(docs)} documents to vector database..."
-    uuids = [str(uuid4()) for _ in range(len(docs))]
-    vector_store.add_documents(docs, ids=uuids)
+    yield f"💾 Adding {len(docs)} documents to FAISS database..."
+    vector_store.add_documents(docs)
+
+    # Save the FAISS index to disk
+    vector_store.save_local(str(VECTORSTORE_DIR))
 
     yield "✅ Vector DB update complete!"
 
@@ -131,6 +124,6 @@ if __name__ == "__main__":
     for update in process_urls(urls):
         print(update)
 
-    answer, sources = generate_answer("create a summary on  30 year fixed mortgage rate")
+    answer, sources = generate_answer("create a summary on 30 year fixed mortgage rate")
     print(f"\n🧠 Answer: {answer}")
     print(f"📚 Sources: {sources}")
